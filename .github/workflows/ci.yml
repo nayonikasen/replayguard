@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+      - name: replayguard must flag the bad fixtures
+        run: |
+          if replayguard check tests/fixtures/bad_workflow.py; then
+            echo "expected findings in bad_workflow.py" >&2
+            exit 1
+          fi
+      - name: replayguard must pass the good fixtures
+        run: replayguard check tests/fixtures/good_workflow.py tests/fixtures/good_activities.py
