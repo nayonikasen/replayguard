@@ -1,9 +1,9 @@
 """LLM review pass: a semantic side-effect audit of each activity.
 
 Static rules can see *that* an activity posts to an API; they cannot see
-whether the write is safe to run twice. This pass sends each activity to
-Claude and asks the one question retries force on you: if this function is
-killed after the side effect and re-run from the top, what happens?
+whether the write is safe to run twice. This pass sends each activity to the
+review model and asks the one question retries force on you: if this function
+is killed after the side effect and re-run from the top, what happens?
 """
 
 from __future__ import annotations
