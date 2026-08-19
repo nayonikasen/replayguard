@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "replayguard"
 version = "0.1.0"
-description = "Linter and review agent for Temporal Python workflows: catches determinism violations, replay hazards, and non-idempotent activities before they page you."
+description = "Zero-dependency linter for Temporal Python workflows: catches determinism violations, replay hazards, and non-idempotent activities before they page you."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -30,9 +30,6 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# Floor verified against 0.122.0 — the reviewer needs output_config
-# structured outputs, which older SDKs reject as an unknown parameter.
-llm = ["anthropic>=0.122"]
 dev = ["pytest>=8"]
 
 [project.scripts]

@@ -1,10 +1,10 @@
 # ReplayGuard
 
-**A linter + review agent for Temporal Python workflows. Catches determinism violations, replay hazards, and non-idempotent activities in CI — before they page you at 3am.**
+**A zero-dependency linter for Temporal Python workflows. Catches determinism violations, replay hazards, and non-idempotent activities in CI — before they page you at 3am.**
 
 [![CI](https://github.com/nayonikasen/replayguard/actions/workflows/ci.yml/badge.svg)](https://github.com/nayonikasen/replayguard/actions/workflows/ci.yml)
 
-Durable execution makes a hard promise: crash anywhere, resume exactly. That promise holds only if your workflow code is deterministic and your activities are safe to retry — and today both invariants are enforced by convention, reviewed by humans, and broken in production. ReplayGuard checks them statically, plus an optional LLM pass that audits each activity for the question no AST rule can answer: *if this function is killed after its side effect and re-run from the top, what happens?*
+Durable execution makes a hard promise: crash anywhere, resume exactly. That promise holds only if your workflow code is deterministic and your activities are safe to retry — and today both invariants are enforced by convention, reviewed by humans, and broken in production. ReplayGuard checks them statically, in the pull request instead of the postmortem.
 
 ```console
 $ replayguard check orders/
@@ -19,21 +19,17 @@ replayguard: 3 error(s), 1 warning(s), 0 info in 4 file(s)
 ## Install
 
 ```bash
-pip install replayguard            # static rules, zero dependencies
-pip install 'replayguard[llm]'     # + the LLM review pass
+pip install replayguard            # zero dependencies, stdlib only
 ```
 
 ## Usage
 
 ```bash
-replayguard check path/to/code       # static rules; exit 1 on errors
+replayguard check path/to/code       # run the rules; exit 1 on errors
 replayguard check . --explain        # print the production rationale behind each finding
 replayguard check . --format github  # annotations in GitHub Actions
-replayguard review path/to/code      # static rules + LLM retry-safety audit of activities
 replayguard rules                    # list every rule and why it exists
 ```
-
-The `review` command needs Anthropic credentials (`ANTHROPIC_API_KEY`, or a profile from `ant auth login`). Pick the model with `--model` or `REPLAYGUARD_MODEL` (default: `claude-opus-5`).
 
 Silence a single finding inline instead of disabling the whole rule:
 
@@ -68,20 +64,19 @@ Every rule exists because the failure it catches happens in real production syst
 | RG202 | `RetryPolicy` with no bound | unbounded retries against a paid API silently multiply your bill |
 | RG203 | bare `except:` / `except BaseException:` | it swallows `CancelledError` — the workflow keeps running after you cancel it |
 
-### Agent-era rules (RG3xx–RG4xx) — LLM calls are the new I/O
+### Agent-era rules (RG3xx) — model calls are the new I/O
 
 | Rule | Catches | Because… |
 |------|---------|----------|
 | RG301 | model API calls in workflow code | replay would re-issue the call: pay again, get a different answer |
 | RG302 | external writes in activities | retries re-run activities from the top; every write needs an idempotency story |
-| RG401 | *(LLM pass)* effects that duplicate on retry with no visible guard | "the agent did it twice" starts here |
 
 ## Doesn't Temporal's sandbox already do this?
 
 Partly — and where it does, ReplayGuard is defense in depth, not a replacement. The Python SDK's workflow sandbox intercepts many non-deterministic calls **at runtime, on the worker**. ReplayGuard is complementary on three axes:
 
 1. **Shift left.** A sandbox violation surfaces when the workflow executes; a lint failure surfaces in the pull request.
-2. **Different coverage.** The sandbox doesn't police set-iteration ordering, unbounded retry cost, swallowed cancellation, missing timeouts (until the call raises), or the semantic idempotency of your activities. Those are exactly the RG107/RG2xx/RG3xx/RG401 lanes.
+2. **Different coverage.** The sandbox doesn't police set-iteration ordering, unbounded retry cost, swallowed cancellation, missing timeouts (until the call raises), or your activities' retry semantics. Those are exactly the RG107/RG2xx/RG3xx lanes.
 3. **Sandbox-off code.** Plenty of production code runs with the sandbox disabled or passed-through for performance; static analysis doesn't care.
 
 ## Honest limitations
@@ -89,7 +84,7 @@ Partly — and where it does, ReplayGuard is defense in depth, not a replacement
 - Python + `temporalio` only, for now. Name matching is import-resolved but not scope-aware: dynamic dispatch can evade rules, and a local variable shadowing an imported name can trigger one (a linter, not a prover).
 - `from temporalio.workflow import *` defeats classification entirely — the file lints clean. Don't star-import in workflow files (you shouldn't anyway).
 - RG107 only sees literal sets in iteration position; a set bound to a variable first is missed.
-- The LLM pass reports what's *visible in the code* — it can't know your gateway dedupes downstream. Treat RG401 findings as review prompts, not verdicts.
+- RG302 reports what's *visible in the code* — it can't know your gateway dedupes downstream. Treat it as a review prompt, not a verdict (which is why it's info-level).
 - No config file yet; use `--select` / `--ignore` or inline `# replayguard: ignore[...]` comments.
 
 ## Roadmap

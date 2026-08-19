@@ -60,8 +60,7 @@ class UnverifiedSideEffectRule(CallMatchRule):
     why = (
         "Activities retry from the top: a crash after the write but before "
         "completion records nothing, so the retry writes again. Every external "
-        "write needs an idempotency key, an upsert, or a dedup check — "
-        "`replayguard review` runs a semantic audit of each one."
+        "write needs an idempotency key, an upsert, or a dedup check."
     )
     contexts = frozenset({ACTIVITY})
     suffixes = (
@@ -86,7 +85,7 @@ class UnverifiedSideEffectRule(CallMatchRule):
     def message_for(self, dotted: str) -> str:
         return (
             f"`{dotted}()` looks like an external write in an activity; verify "
-            "it is idempotent across retries (or run `replayguard review`)"
+            "it is idempotent across retries"
         )
 
 

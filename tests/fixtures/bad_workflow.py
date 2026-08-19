@@ -53,7 +53,7 @@ class OrderWorkflow:
         except BaseException:  # RG203
             pass
         summary = self.client.messages.create(  # RG301
-            model="claude-opus-5",
+            model="prod-model",
             max_tokens=100,
             messages=[{"role": "user", "content": "summarize"}],
         )

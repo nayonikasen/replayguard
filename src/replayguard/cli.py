@@ -18,9 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "rules":
         return _cmd_rules()
     if args.command == "check":
-        return _cmd_check(args, with_llm=False)
-    if args.command == "review":
-        return _cmd_check(args, with_llm=True)
+        return _cmd_check(args)
     return 2
 
 
@@ -46,24 +44,14 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--ignore", default="", help="comma-separated rule ids to skip")
         p.add_argument("--explain", action="store_true", help="print the why behind each finding")
 
-    check = sub.add_parser("check", help="run the static rules")
+    check = sub.add_parser("check", help="run the rules")
     add_common(check)
-
-    review = sub.add_parser(
-        "review", help="run the static rules plus the LLM retry-safety audit of activities"
-    )
-    add_common(review)
-    review.add_argument(
-        "--model",
-        default=None,
-        help="model for the review pass (default: $REPLAYGUARD_MODEL or claude-opus-5)",
-    )
 
     sub.add_parser("rules", help="list every rule with its rationale")
     return parser
 
 
-def _cmd_check(args: argparse.Namespace, with_llm: bool) -> int:
+def _cmd_check(args: argparse.Namespace) -> int:
     select = {r.strip() for r in args.select.split(",") if r.strip()} or None
     ignore = {r.strip() for r in args.ignore.split(",") if r.strip()} or None
 
@@ -76,20 +64,6 @@ def _cmd_check(args: argparse.Namespace, with_llm: bool) -> int:
         print("replayguard: no Python files matched", file=sys.stderr)
 
     findings = analyze_paths(files, select=select, ignore=ignore)
-
-    llm_rule_active = (select is None or "RG401" in select) and (
-        ignore is None or "RG401" not in ignore
-    )
-    if with_llm and llm_rule_active:
-        from replayguard.llm.reviewer import review_paths
-
-        findings.extend(review_paths(files, model=args.model))
-        findings.sort(key=lambda f: (f.path, f.line, f.col, f.rule_id))
-    elif with_llm:
-        print(
-            "replayguard: RG401 excluded by --select/--ignore; skipping the LLM pass",
-            file=sys.stderr,
-        )
 
     _emit(findings, args.format, args.explain)
     _summary(findings, len(files))
@@ -130,17 +104,9 @@ def _summary(findings: list[Finding], file_count: int) -> None:
 
 
 def _cmd_rules() -> int:
-    # Import from the reviewer would pull nothing heavy (anthropic loads
-    # lazily), but the rules listing must never depend on the llm extra —
-    # so RG401's entry is restated here.
     for rule in ALL_RULES:
         print(f"{rule.id} [{rule.severity.value}] {rule.title}")
         print(f"    {rule.why}")
-    print("RG401 [warning] Effect duplicated on retry with no visible guard (LLM review pass)")
-    print(
-        "    Activities retry from the top; any effect without an idempotency "
-        "mechanism can be applied more than once. Emitted by `replayguard review`."
-    )
     print("RG000 [error] Unparseable file")
     print("    ReplayGuard analyzes the AST; unparseable files are unverifiable.")
     return 0
